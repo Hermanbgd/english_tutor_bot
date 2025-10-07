@@ -38,11 +38,17 @@ class LoggSettings:
 
 
 @dataclass
+class GrokSettings:
+    token: str
+
+
+@dataclass
 class Config:
     bot: BotSettings
     db: DatabaseSettings
     redis: RedisSettings
     log: LoggSettings
+    grok: GrokSettings
 
 
 def load_config(path: str | None = None) -> Config:
@@ -89,11 +95,16 @@ def load_config(path: str | None = None) -> Config:
         format=env("LOG_FORMAT")
     )
 
+    grok_settings = GrokSettings(
+        token=env("GROQ_API_KEY"),
+    )
+
     logger.info("Configuration loaded successfully")
 
     return Config(
         bot=BotSettings(token=token, admin_ids=admin_ids),
         db=db,
         redis=redis,
-        log=logg_settings
+        log=logg_settings,
+        grok=grok_settings
     )

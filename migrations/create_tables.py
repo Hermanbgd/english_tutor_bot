@@ -16,6 +16,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Настройка цикла событий для Windows
 if sys.platform.startswith("win") or os.name == "nt":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
@@ -41,7 +42,6 @@ async def main():
                             user_id BIGINT NOT NULL UNIQUE,
                             username VARCHAR(50),
                             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                            language VARCHAR(10) NOT NULL,
                             role VARCHAR(30) NOT NULL,
                             is_alive BOOLEAN NOT NULL,
                             banned BOOLEAN NOT NULL

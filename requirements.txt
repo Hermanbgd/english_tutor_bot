@@ -1,6 +1,5 @@
-psycopg-pool~=3.2.6
 aiogram~=3.22.0
-redis~=6.4.0
+openai-whisper~=20250625
+pydub~=0.25.1
+psycopg-pool~=3.2.6
 Booktype~=1.5
-psycopg~=3.2.10
-environs~=14.3.0

@@ -13,40 +13,36 @@ async def add_user(
     *,
     user_id: int,
     username: str | None = None,
-    language: str = "ru",
     role: UserRole = UserRole.USER,
     is_alive: bool = True,
     banned: bool = False,
 ) -> None:
     async with conn.cursor() as cursor:
         await cursor.execute(
-            query="""
-                INSERT INTO users(user_id, username, language, role, is_alive, banned)
+            """
+                INSERT INTO users(user_id, username, role, is_alive, banned)
                 VALUES(
-                    %(user_id)s, 
-                    %(username)s, 
-                    %(language)s, 
-                    %(role)s, 
-                    %(is_alive)s, 
-                    %(banned)s
-                ) ON CONFLICT DO NOTHING;
+                    %s, 
+                    %s, 
+                    %s, 
+                    %s, 
+                    %s
+                ) ON CONFLICT (user_id) DO NOTHING;
             """,
-            params={
-                "user_id": user_id,
-                "username": username,
-                "language": language,
-                "role": role,
-                "is_alive": is_alive,
-                "banned": banned,
-            },
+            (
+                user_id,
+                username,
+                role,
+                is_alive,
+                banned,
+            ),
         )
     logger.info(
         "User added. Table=`%s`, user_id=%d, created_at='%s', "
-        "language='%s', role=%s, is_alive=%s, banned=%s",
+        "role=%s, is_alive=%s, banned=%s",
         "users",
         user_id,
         datetime.now(timezone.utc),
-        language,
         role,
         is_alive,
         banned,
@@ -59,22 +55,21 @@ async def get_user(
     user_id: int,
 ) -> tuple[Any, ...] | None:
     async with conn.cursor() as cursor:
-        data = await cursor.execute(
-            query="""
+        await cursor.execute(
+            """
                 SELECT 
                     id,
                     user_id,
                     username,
-                    language,
                     role,
                     is_alive,
                     banned,
                     created_at
                     FROM users WHERE user_id = %s;
             """,
-            params=(user_id,),
+            (user_id,),
         )
-        row = await data.fetchone()
+        row = await cursor.fetchone()
     logger.info("Row is %s", row)
     return row if row else None
 
@@ -87,12 +82,12 @@ async def change_user_alive_status(
 ) -> None:
     async with conn.cursor() as cursor:
         await cursor.execute(
-            query="""
+            """
                 UPDATE users
                 SET is_alive = %s
                 WHERE user_id = %s;
             """,
-            params=(is_alive, user_id)
+            (is_alive, user_id)
         )
     logger.info("Updated `is_alive` status to `%s` for user %d", is_alive, user_id)
 
@@ -105,12 +100,12 @@ async def change_user_banned_status_by_id(
 ) -> None:
     async with conn.cursor() as cursor:
         await cursor.execute(
-            query="""
+            """
                 UPDATE users
                 SET banned = %s
                 WHERE user_id = %s
             """,
-            params=(banned, user_id)
+            (banned, user_id)
         )
     logger.info("Updated `banned` status to `%s` for user %d", banned, user_id)
 
@@ -123,52 +118,14 @@ async def change_user_banned_status_by_username(
 ) -> None:
     async with conn.cursor() as cursor:
         await cursor.execute(
-            query="""
+            """
                 UPDATE users
                 SET banned = %s
                 WHERE username = %s
             """,
-            params=(banned, username)
+            (banned, username)
         )
     logger.info("Updated `banned` status to `%s` for username %s", banned, username)
-
-
-async def update_user_lang(
-    conn: AsyncConnection,
-    *,
-    language: str,
-    user_id: int,
-) -> None:
-    async with conn.cursor() as cursor:
-        await cursor.execute(
-            query="""
-                UPDATE users
-                SET language = %s
-                WHERE user_id = %s
-            """,
-            params=(language, user_id)
-        )
-    logger.info("The language `%s` is set for the user `%s`", language, user_id)
-
-
-async def get_user_lang(
-    conn: AsyncConnection,
-    *,
-    user_id: int,
-) -> str | None:
-    async with conn.cursor() as cursor:
-        data = await cursor.execute(
-            query="""
-                SELECT language FROM users WHERE user_id = %s;
-            """,
-            params=(user_id,),
-        )
-        row = await data.fetchone()
-    if row:
-        logger.info("The user with `user_id`=%s has the language %s", user_id, row[0])
-    else:
-        logger.warning("No user with `user_id`=%s found in the database", user_id)
-    return row[0] if row else None
 
 
 async def get_user_alive_status(
@@ -177,13 +134,13 @@ async def get_user_alive_status(
     user_id: int,
 ) -> bool | None:
     async with conn.cursor() as cursor:
-        data = await cursor.execute(
-            query="""
+        await cursor.execute(
+            """
                 SELECT is_alive FROM users WHERE user_id = %s;
             """,
-            params=(user_id,),
+            (user_id,),
         )
-        row = await data.fetchone()
+        row = await cursor.fetchone()
     if row:
         logger.info("The user with `user_id`=%s has the is_alive status is %s", user_id, row[0])
     else:
@@ -197,13 +154,13 @@ async def get_user_banned_status_by_id(
     user_id: int,
 ) -> bool | None:
     async with conn.cursor() as cursor:
-        data = await cursor.execute(
-            query="""
+        await cursor.execute(
+            """
                 SELECT banned FROM users WHERE user_id = %s;
             """,
-            params=(user_id,),
+            (user_id,),
         )
-        row = await data.fetchone()
+        row = await cursor.fetchone()
     if row:
         logger.info("The user with `user_id`=%s has the banned status is %s", user_id, row[0])
     else:
@@ -217,13 +174,13 @@ async def get_user_banned_status_by_username(
     username: str,
 ) -> bool | None:
     async with conn.cursor() as cursor:
-        data = await cursor.execute(
-            query="""
+        await cursor.execute(
+            """
                 SELECT banned FROM users WHERE username = %s;
             """,
-            params=(username,),
+            (username,),
         )
-        row = await data.fetchone()
+        row = await cursor.fetchone()
     if row:
         logger.info("The user with `username`=%s has the banned status is %s", username, row[0])
     else:
@@ -237,97 +194,67 @@ async def get_user_role(
     user_id: int,
 ) -> UserRole | None:
     async with conn.cursor() as cursor:
-        data = await cursor.execute(
-            query="""
+        await cursor.execute(
+            """
                 SELECT role FROM users WHERE user_id = %s;
             """,
-            params=(user_id,),
+            (user_id,),
         )
-        row = await data.fetchone()
+        row = await cursor.fetchone()
     if row:
         logger.info("The user with `user_id`=%s has the role is %s", user_id, row[0])
+        return UserRole(row[0])
     else:
         logger.warning("No user with `user_id`=%s found in the database", user_id)
-    return UserRole(row[0]) if row else None
+    return None
 
 
-async def add_user_activity(
-    conn: AsyncConnection,
-    *,
-    user_id: int,
-) -> None:
+async def save_dialog_pair(conn: AsyncConnection, user_id: int, user_message: str, ai_message: str) -> None:
+    async with conn.transaction():
+        async with conn.cursor() as cursor:
+            # Добавляем новую пару
+            await cursor.execute(
+                """
+                INSERT INTO dialog_history (user_id, user_message, ai_message)
+                VALUES (%s, %s, %s)
+                """,
+                (user_id, user_message, ai_message)
+            )
+            # Удаляем все, кроме 5 последних пар
+            await cursor.execute(
+                """
+                DELETE FROM dialog_history
+                WHERE id NOT IN (
+                    SELECT id FROM (
+                        SELECT id FROM dialog_history
+                        WHERE user_id = %s
+                        ORDER BY created_at DESC
+                        LIMIT 5
+                    ) AS t
+                ) AND user_id = %s
+                """,
+                (user_id, user_id)
+            )
+
+
+async def get_last_5_pairs(conn: AsyncConnection, user_id: int) -> list[tuple[Any, ...]]:
     async with conn.cursor() as cursor:
         await cursor.execute(
-            query="""
-                INSERT INTO activity (user_id)
-                VALUES (%s)
-                ON CONFLICT (user_id, activity_date)
-                DO UPDATE
-                SET actions = activity.actions + 1;
-            """,
-            params=(user_id,),
-        )
-    logger.info("User activity updated. table=`activity`, user_id=%d", user_id)
-
-
-async def get_statistics(conn: AsyncConnection) -> list[Any, ...] | None:
-    async with conn.cursor() as cursor:
-        data = await cursor.execute(
-            query="""
-                SELECT user_id, SUM(actions) AS total_actions
-                FROM activity
-                GROUP BY user_id
-                ORDER BY total_actions DESC
-                LIMIT 5;
-            """,
-        )
-        rows = await data.fetchall()
-    logger.info("Users activity got from table=`activity`")
-    return [*rows] if rows else None
-
-##################################################################################
-##################################################################################
-##################################################################################
-
-
-async def save_dialog_pair(connection, user_id, user_message, ai_message):
-    async with connection.transaction():
-        # Добавляем новую пару
-        await connection.execute(
             """
-            INSERT INTO dialog_history (user_id, user_message, ai_message)
-            VALUES ($1, $2, $3)
+            SELECT user_message, ai_message
+            FROM dialog_history
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            LIMIT 5
             """,
-            user_id, user_message, ai_message
+            (user_id,)
         )
-        # Удаляем все, кроме 10 последних пар
-        await connection.execute(
-            """
-            DELETE FROM dialog_history
-            WHERE id NOT IN (
-                SELECT id FROM dialog_history
-                WHERE user_id = $1
-                ORDER BY created_at DESC
-                LIMIT 10
-            ) AND user_id = $1
-            """,
-            user_id
-        )
-
-async def get_last_10_pairs(connection, user_id):
-    rows = await connection.fetch(
-        """
-        SELECT user_message, ai_message
-        FROM dialog_history
-        WHERE user_id = $1
-        ORDER BY created_at DESC
-        LIMIT 10
-        """,
-        user_id
-    )
+        rows = await cursor.fetchall()
     # Разворачиваем, чтобы пары шли от старых к новым
-    return list(reversed(rows))
+    return list(reversed(rows)) if rows else []
 
+#
+#
 # Как сформировать словарь для отправки в AI
 # Допустим, вы хотите получить список словарей такого вида:
 # [
@@ -335,22 +262,22 @@ async def get_last_10_pairs(connection, user_id):
 #     {"user": "How are you?", "ai": "I'm fine, thanks!"},
 #     ...
 # ]
-
-
-pairs = await get_last_10_pairs(connection, user_id)
-dialog = [{"user": row["user_message"], "ai": row["ai_message"]} for row in pairs]
-
-async def build_dialog(connection, user_id):
-    pairs = await get_last_10_pairs(connection, user_id)
-    dialog = [{"user": row["user_message"], "ai": row["ai_message"]} for row in pairs]
-    return dialog
-
-async def main():
-    # ... тут подключение к БД ...
-    dialog = await build_dialog(connection, user_id)
-    # ... используете dialog дальше ...
-
-# Запуск
-import asyncio
-asyncio.run(main())
+#
+#
+# pairs = await get_last_10_pairs(connection, user_id)
+# dialog = [{"user": row["user_message"], "ai": row["ai_message"]} for row in pairs]
+#
+# async def build_dialog(connection, user_id):
+#     pairs = await get_last_10_pairs(connection, user_id)
+#     dialog = [{"user": row["user_message"], "ai": row["ai_message"]} for row in pairs]
+#     return dialog
+#
+# async def main():
+#     # ... тут подключение к БД ...
+#     dialog = await build_dialog(connection, user_id)
+#     # ... используете dialog дальше ...
+#
+# # Запуск
+# import asyncio
+# asyncio.run(main())
 

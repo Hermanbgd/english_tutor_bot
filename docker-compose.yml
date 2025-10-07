@@ -76,6 +76,20 @@ services:
         max-file: "5"
         compress: "true"
 
+  bot:
+    build: .
+    container_name: telegram_bot
+    env_file:
+      - .env
+    environment:
+      - API_TOKEN=${BOT_TOKEN}
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+    networks:
+      - app_network
+
 networks:
   app_network:
     name: app_network
