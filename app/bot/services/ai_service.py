@@ -95,7 +95,7 @@ async def generate_ai_reply(conn, user_id: int, user_input: str) -> str:
             None,
             lambda: client.chat.completions.create(
                 messages=messages,
-                model="llama-3.3-70b-versatile",
+                model=config.grok.model_dialog,
                 max_tokens=100,
                 temperature=0.8,
             ),

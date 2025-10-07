@@ -40,6 +40,7 @@ class LoggSettings:
 @dataclass
 class GrokSettings:
     token: str
+    model_dialog: str
 
 
 @dataclass
@@ -97,6 +98,7 @@ def load_config(path: str | None = None) -> Config:
 
     grok_settings = GrokSettings(
         token=env("GROQ_API_KEY"),
+        model_dialog=env("MODEL_FOR_DIALOG")
     )
 
     logger.info("Configuration loaded successfully")
