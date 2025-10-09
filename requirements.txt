@@ -1,7 +1,7 @@
 # !!!! Нужна такая версия openai-whisper==20231117
 psycopg-pool~=3.2.6
 aiogram~=3.22.0
-Booktype~=1.5
+# Booktype~=1.5  # removed: incompatible, pulls very old redis
 psycopg~=3.2.10
 tiktoken~=0.11.0
 groq~=0.32.0
@@ -9,4 +9,4 @@ openai-whisper==20231117
 pydub~=0.25.1
 requests~=2.32.5
 environs~=14.3.0
-redis~=4.5.4
+redis>=5.0,<6

@@ -65,14 +65,14 @@ async def process_start_command(
     #             await bot.edit_message_reply_markup(chat_id=message.from_user.id, message_id=msg_id)
     #     user_lang = await get_user_lang(conn, user_id=message.from_user.id)
     #     i18n = translations.get(user_lang)
-
-    await bot.set_my_commands(
-        commands=get_main_menu_commands(i18n=i18n, role=user_role),
-        scope=BotCommandScopeChat(
-            type=BotCommandScopeType.CHAT,
-            chat_id=message.from_user.id
-        )
-    )
+    #
+    # await bot.set_my_commands(
+    #     commands=get_main_menu_commands(i18n=i18n, role=user_role),
+    #     scope=BotCommandScopeChat(
+    #         type=BotCommandScopeType.CHAT,
+    #         chat_id=message.from_user.id
+    #     )
+    # )
 
     # await message.answer(text=i18n.get("/start"))
     await message.answer(text="Вы добавлены в базу данных, можете пользоваться ботом")

@@ -75,6 +75,8 @@ services:
         max-size: "10m"
         max-file: "5"
         compress: "true"
+    networks:
+      - app_network
 
   bot:
     build: .
@@ -84,8 +86,10 @@ services:
     environment:
       - API_TOKEN=${BOT_TOKEN}
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - app_network

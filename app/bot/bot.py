@@ -14,7 +14,7 @@ from app.bot.middlewares.database import DataBaseMiddleware
 # from app.bot.middlewares.i18n import TranslatorMiddleware
 # from app.bot.middlewares.lang_settings import LangSettingsMiddleware
 from app.bot.middlewares.shadow_ban import ShadowBanMiddleware
-from app.bot.middlewares.statistics import ActivityCounterMiddleware
+# from app.bot.middlewares.statistics import ActivityCounterMiddleware
 from app.infrastructure.database.connection import get_pg_pool
 from config.config import Config
 from redis.asyncio import Redis
@@ -66,7 +66,7 @@ async def main(config: Config) -> None:
     logger.info("Including middlewares...")
     dp.update.middleware(DataBaseMiddleware())
     dp.update.middleware(ShadowBanMiddleware())
-    dp.update.middleware(ActivityCounterMiddleware())
+    # dp.update.middleware(ActivityCounterMiddleware())
     # dp.update.middleware(LangSettingsMiddleware())
     # dp.update.middleware(TranslatorMiddleware())
 
