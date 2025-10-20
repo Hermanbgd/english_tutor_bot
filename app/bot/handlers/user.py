@@ -8,12 +8,14 @@ from aiogram.enums import BotCommandScopeType
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import KICKED, ChatMemberUpdatedFilter, Command, CommandStart
 from aiogram.fsm.context import FSMContext
+from aiogram.types import FSInputFile
 from aiogram.types import BotCommandScopeChat, ChatMemberUpdated, Message
 from app.bot.enums.roles import UserRole
 from app.bot.keyboards.menu_button import get_main_menu_commands
 from app.bot.services.voice_to_text_service import transcribe_voice_message
 from app.bot.services.ai_service import generate_ai_reply
 from app.bot.states.states import LangSG
+from app.bot.services.speech_service import t_t_v
 from app.infrastructure.database.db import (
     add_user,
     change_user_alive_status,
@@ -95,13 +97,26 @@ async def process_user_blocked_bot(event: ChatMemberUpdated, conn: AsyncConnecti
 # Этот хэгдлер срабатывает на отправку боту голосового сообщения
 @user_router.message(F.voice)
 async def handle_voice(message: Message, conn: AsyncConnection):
+    ai_voice = None
     try:
         logger.info(f"Получено голосовое сообщение от пользователя {message.from_user.id}")
         user_mes = await transcribe_voice_message(message.bot, message.voice.file_id)
         ai_reply = await generate_ai_reply(conn, message.from_user.id, user_mes)
-        await message.answer(f"Распознанный текст:\n{user_mes}")
-        await message.answer(ai_reply)
+        logger.info(f"Получен ответ от модели {ai_reply}")
+        # await message.answer(f"Распознанный текст:\n{user_mes}")
+        ai_voice = await t_t_v(ai_reply)
+        if ai_voice:
+            voice = FSInputFile(ai_voice)
+            await message.answer_voice(voice)
+            logger.info(f"Сообщение: '{ai_reply}' озвучено и отправлено")
+        else:
+            await message.answer(ai_reply)
+            logger.info(f"Не получилось озвучить сообщение: '{ai_reply}' отправлен текст")
     except Exception as e:
         logger.exception(f"Ошибка при обработке голосового сообщения: {e}")
         await message.reply("Произошла ошибка при обработке вашего голосового сообщения. Попробуйте ещё раз.")
+    finally:
+        if ai_voice and os.path.exists(ai_voice):
+            os.remove(ai_voice)
+            logger.info(f"Deleted voice file: {ai_voice}")
 

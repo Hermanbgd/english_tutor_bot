@@ -1,5 +1,9 @@
 .venv
+**/.venv
+venv
+**/venv
 __pycache__
+**/__pycache__
 *.pyc
 *.pyo
 *.pyd
@@ -16,3 +20,10 @@ node_modules
 data
 media
 uploads
+.cache
+.mypy_cache
+.pytest_cache
+.pgadmin_data/
+.postgres_data/
+.qodo/
+.redis_data/

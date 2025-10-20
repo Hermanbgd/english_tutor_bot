@@ -1,3 +1,7 @@
+# Для запуска миграций из контейнера, когда в постгрес и редис хосты указаны по названию:
+# docker-compose exec bot python -m migrations.create_tables
+# docker compose build bot
+# docker compose up -d bot
 import asyncio
 import logging
 import os

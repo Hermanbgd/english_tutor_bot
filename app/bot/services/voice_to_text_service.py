@@ -44,12 +44,14 @@ async def transcribe_voice_message(bot: Bot, file_id: str) -> str:
         await loop.run_in_executor(None, ogg_to_wav, ogg_path, wav_path)
 
         result = await loop.run_in_executor(
-            None, lambda: model.transcribe(wav_path)
+            None, lambda: model.transcribe(wav_path, language="en")
         )
         text = result["text"]
         logger.info(f"Transcribed text: {text}")
         return text
-
+    except Exception as e:
+        logger.exception(f"Error transcribing voice message: {e}")
+        raise  # или вернуть сообщение об ошибке, например, "Failed to transcribe"
     finally:
         for path in (ogg_path, wav_path):
             if path and os.path.exists(path):

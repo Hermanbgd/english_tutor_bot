@@ -9,3 +9,9 @@ __pycache__/
 .redis_data/
 .postgres_data/
 .pgadmin_data/
+.git
+pycache
+*.pyc
+*.pyo
+*.ogg
+*.wav
