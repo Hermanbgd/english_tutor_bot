@@ -4,7 +4,7 @@ import os
 from contextlib import suppress
 
 from aiogram import Bot, Router, F
-from aiogram.enums import BotCommandScopeType
+from aiogram.enums import BotCommandScopeType, ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import KICKED, ChatMemberUpdatedFilter, Command, CommandStart
 from aiogram.fsm.context import FSMContext
@@ -12,9 +12,10 @@ from aiogram.types import FSInputFile
 from aiogram.types import BotCommandScopeChat, ChatMemberUpdated, Message
 from app.bot.enums.roles import UserRole
 from app.bot.keyboards.menu_button import get_main_menu_commands
+from app.bot.services.translation_service import translate_en_to_ru
 from app.bot.services.voice_to_text_service import transcribe_voice_message
 from app.bot.services.ai_service import generate_ai_reply
-from app.bot.states.states import LangSG
+from app.bot.services.grammar_service import get_corrected_sentence
 from app.bot.services.speech_service import t_t_v
 from app.infrastructure.database.db import (
     add_user,
@@ -59,24 +60,6 @@ async def process_start_command(
             user_id=message.from_user.id,
         )
 
-    # if await state.get_state() == LangSG.lang:
-    #     data = await state.get_data()
-    #     with suppress(TelegramBadRequest):
-    #         msg_id = data.get("lang_settings_msg_id")
-    #         if msg_id:
-    #             await bot.edit_message_reply_markup(chat_id=message.from_user.id, message_id=msg_id)
-    #     user_lang = await get_user_lang(conn, user_id=message.from_user.id)
-    #     i18n = translations.get(user_lang)
-    #
-    # await bot.set_my_commands(
-    #     commands=get_main_menu_commands(i18n=i18n, role=user_role),
-    #     scope=BotCommandScopeChat(
-    #         type=BotCommandScopeType.CHAT,
-    #         chat_id=message.from_user.id
-    #     )
-    # )
-
-    # await message.answer(text=i18n.get("/start"))
     await message.answer(text="Вы добавлены в базу данных, можете пользоваться ботом")
     await state.clear()
 
@@ -94,24 +77,42 @@ async def process_user_blocked_bot(event: ChatMemberUpdated, conn: AsyncConnecti
     await change_user_alive_status(conn, user_id=event.from_user.id, is_alive=False)
 
 
-# Этот хэгдлер срабатывает на отправку боту голосового сообщения
+# Этот хэндлер срабатывает на отправку боту голосового сообщения
 @user_router.message(F.voice)
 async def handle_voice(message: Message, conn: AsyncConnection):
     ai_voice = None
     try:
         logger.info(f"Получено голосовое сообщение от пользователя {message.from_user.id}")
         user_mes = await transcribe_voice_message(message.bot, message.voice.file_id)
+        logger.info(f"Преобразованное текстовое сообщение: {user_mes}")
+         # Проверка грамматики
+        corrected_sentence = await get_corrected_sentence(user_mes)
+        if corrected_sentence != "No errors.":
+            await message.answer(corrected_sentence, parse_mode=ParseMode.HTML)
+            logger.info(f"Отправлено исправленное сообщение: {corrected_sentence}")
+        # Генерация ответа ИИ
         ai_reply = await generate_ai_reply(conn, message.from_user.id, user_mes)
         logger.info(f"Получен ответ от модели {ai_reply}")
-        # await message.answer(f"Распознанный текст:\n{user_mes}")
         ai_voice = await t_t_v(ai_reply)
         if ai_voice:
             voice = FSInputFile(ai_voice)
             await message.answer_voice(voice)
-            logger.info(f"Сообщение: '{ai_reply}' озвучено и отправлено")
+            logger.info(f"Голосовое сообщение: '{ai_reply}' отправлено")
+
+            # отправка скрытых сообщений
+            answer_ai_spoiler = f'<span class="tg-spoiler">{ai_reply}</span>'
+            await message.answer(text=f'Текст:  {answer_ai_spoiler}', parse_mode=ParseMode.HTML)
+
+            translate_ai_answer = await translate_en_to_ru(ai_reply)
+            answer_ru_ai_spoiler = f'<span class="tg-spoiler">{translate_ai_answer}</span>'
+            await message.answer(text=f'Перевод:  {answer_ru_ai_spoiler}', parse_mode=ParseMode.HTML)
         else:
             await message.answer(ai_reply)
             logger.info(f"Не получилось озвучить сообщение: '{ai_reply}' отправлен текст")
+            # отправка скрытого перевода
+            translate_ai_answer = await translate_en_to_ru(ai_reply)
+            answer_ru_ai_spoiler = f'<span class="tg-spoiler">{translate_ai_answer}</span>'
+            await message.answer(text=f'Перевод:  {answer_ru_ai_spoiler}', parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.exception(f"Ошибка при обработке голосового сообщения: {e}")
         await message.reply("Произошла ошибка при обработке вашего голосового сообщения. Попробуйте ещё раз.")

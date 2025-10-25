@@ -38,9 +38,8 @@ class LoggSettings:
 
 
 @dataclass
-class GrokSettings:
+class AISettings:
     token: str
-    model_dialog: str
 
 
 @dataclass
@@ -49,7 +48,7 @@ class Config:
     db: DatabaseSettings
     redis: RedisSettings
     log: LoggSettings
-    grok: GrokSettings
+    ai: AISettings
 
 
 def load_config(path: str | None = None) -> Config:
@@ -96,9 +95,8 @@ def load_config(path: str | None = None) -> Config:
         format=env("LOG_FORMAT")
     )
 
-    grok_settings = GrokSettings(
-        token=env("GROQ_API_KEY"),
-        model_dialog=env("MODEL_FOR_DIALOG")
+    ai_settings = AISettings(
+        token=env("CHIPP_API_KEY"),
     )
 
     logger.info("Configuration loaded successfully")
@@ -108,5 +106,5 @@ def load_config(path: str | None = None) -> Config:
         db=db,
         redis=redis,
         log=logg_settings,
-        grok=grok_settings
+        ai=ai_settings
     )

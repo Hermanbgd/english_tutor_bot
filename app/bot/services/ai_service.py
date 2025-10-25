@@ -3,8 +3,8 @@ import sys
 import asyncio
 import logging
 from typing import List, Dict
+import requests
 from config.config import Config, load_config
-from groq import Groq
 import tiktoken
 from app.infrastructure.database.db import get_last_5_pairs, save_dialog_pair
 
@@ -29,22 +29,40 @@ except Exception as e:
     logger.exception("Failed to initialize tiktoken encoding: %s", e)
     raise
 
-# Инициализация Groq клиента один раз при импорте
-try:
-    client = Groq(api_key=config.grok.token)
-    logger.info("Groq client initialized successfully.")
-except Exception as e:
-    logger.exception("Failed to initialize Groq client: %s", e)
-    raise
 
-# Системный промпт
-system_prompt: Dict[str, str] = {
-    "role": "system",
+SYSTEM_PROMPT: Dict[str, str] = {
+    "role": "assistant",
     "content": (
-        "You're a friendly, casual assistant. Answer in a max of 3 sentences, in a conversational tone. "
-        "Occasionally ask a short follow-up question, but not always."
+        "You're a friendly, casual tutor. Answer in 1-2 short sentences, 20-40 words. "
+        "Optionally ask a brief follow-up question."
     ),
 }
+
+URL = "https://app.chipp.ai/api/v1/chat/completions"
+HEADERS = {
+    "Authorization": f"Bearer {config.ai.token}",
+    "Content-Type": "application/json"
+}
+
+# === Синхронная функция для requests (будет в потоке) ===
+def _sync_chat_completion(messages: List[Dict[str, str]]) -> str:
+    payload = {
+        "model": "newapplication-61123",
+        "messages": messages,
+        "stream": False
+    }
+
+    response = requests.post(URL, headers=HEADERS, json=payload, timeout=30)
+
+    if response.status_code == 200:
+        logger.info("API response received successfully.")
+        data = response.json()
+        content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+        return content or "Не удалось получить ответ от ИИ."
+    else:
+        error_msg = f"API Error {response.status_code}: {response.text}"
+        logger.error(error_msg)
+        return "Ошибка сервера. Попробуйте позже."
 
 # Обрезка сообщений до 20 токенов
 def trim_message(text: str, max_tokens: int = 20) -> str:
@@ -59,7 +77,7 @@ async def _build_messages_from_db(conn, user_id: int) -> List[Dict[str, str]]:
     Построить список сообщений для модели на основе последних 5 пар из БД.
     Старые сообщения НЕ обрезаются повторно. Обрезка применяется только к новой паре.
     """
-    messages: List[Dict[str, str]] = [system_prompt]
+    messages: List[Dict[str, str]] = [SYSTEM_PROMPT]
 
     # Получаем последние 5 пар из БД в порядке от старых к новым
     pairs = await get_last_5_pairs(conn, user_id)
@@ -72,9 +90,9 @@ async def _build_messages_from_db(conn, user_id: int) -> List[Dict[str, str]]:
 
 async def generate_ai_reply(conn, user_id: int, user_input: str) -> str:
     """
-    Сгенерировать ответ Groq для пользователя user_id с учётом его истории из БД.
+    Сгенерировать ответ для пользователя user_id с учётом его истории из БД.
 
-    Контекст: [system_prompt] + последние 5 пар из БД + новая пользовательская реплика (БЕЗ обрезки).
+    Контекст: [SYSTEM_PROMPT] + последние 5 пар из БД + новая пользовательская реплика (БЕЗ обрезки).
     После получения ответа модели выводим полный ответ в консоль, затем обрезаем новую пару
     и сохраняем её в БД (чтобы не обрезать повторно в будущем). Исторические пары берутся из БД как есть.
     Политика хранения последних 5 пар управляется БД.
@@ -91,16 +109,11 @@ async def generate_ai_reply(conn, user_id: int, user_input: str) -> str:
 
     try:
         loop = asyncio.get_running_loop()
-        chat_completion = await loop.run_in_executor(
+        ai_response = await loop.run_in_executor(
             None,
-            lambda: client.chat.completions.create(
-                messages=messages,
-                model=config.grok.model_dialog,
-                max_tokens=100,
-                temperature=0.8,
-            ),
+            _sync_chat_completion,
+            messages
         )
-        ai_response = chat_completion.choices[0].message.content
         logger.info("Generated response: %s", ai_response)
 
         # Обрезаем новую пару и сохраняем в БД, чтобы не обрезать повторно в будущем
