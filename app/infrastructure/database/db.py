@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 from app.bot.enums.roles import UserRole
 from psycopg import AsyncConnection
@@ -253,31 +253,75 @@ async def get_last_5_pairs(conn: AsyncConnection, user_id: int) -> list[tuple[An
     # Разворачиваем, чтобы пары шли от старых к новым
     return list(reversed(rows)) if rows else []
 
-#
-#
-# Как сформировать словарь для отправки в AI
-# Допустим, вы хотите получить список словарей такого вида:
-# [
-#     {"user": "Hi!", "ai": "Hello!"},
-#     {"user": "How are you?", "ai": "I'm fine, thanks!"},
-#     ...
-# ]
-#
-#
-# pairs = await get_last_10_pairs(connection, user_id)
-# dialog = [{"user": row["user_message"], "ai": row["ai_message"]} for row in pairs]
-#
-# async def build_dialog(connection, user_id):
-#     pairs = await get_last_10_pairs(connection, user_id)
-#     dialog = [{"user": row["user_message"], "ai": row["ai_message"]} for row in pairs]
-#     return dialog
-#
-# async def main():
-#     # ... тут подключение к БД ...
-#     dialog = await build_dialog(connection, user_id)
-#     # ... используете dialog дальше ...
-#
-# # Запуск
-# import asyncio
-# asyncio.run(main())
+
+async def save_error_explanation(
+    conn: AsyncConnection,
+    user_id: int,
+    message_id: int,
+    original_text: str,
+    explanation_text: str
+) -> None:
+    async with conn.transaction():
+        async with conn.cursor() as cursor:
+            # Добавляем новую запись (или обновляем, если существует)
+            await cursor.execute(
+                """
+                INSERT INTO error_explanations (user_id, message_id, original_text, explanation_text)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (user_id, message_id) DO UPDATE
+                SET original_text = EXCLUDED.original_text,
+                    explanation_text = EXCLUDED.explanation_text,
+                    created_at = NOW()
+                """,
+                (user_id, message_id, original_text, explanation_text)
+            )
+            # Удаляем все, кроме 5 последних записей
+            await cursor.execute(
+                """
+                DELETE FROM error_explanations
+                WHERE user_id = %s
+                AND message_id NOT IN (
+                    SELECT message_id
+                    FROM error_explanations
+                    WHERE user_id = %s
+                    ORDER BY created_at DESC
+                    LIMIT 5
+                )
+                """,
+                (user_id, user_id)
+            )
+
+async def get_explanation_text(
+    conn: AsyncConnection,
+    user_id: int,
+    message_id: int
+) -> Optional[str]:
+    async with conn.cursor() as cursor:
+        await cursor.execute(
+            """
+            SELECT explanation_text
+            FROM error_explanations
+            WHERE user_id = %s AND message_id = %s
+            """,
+            (user_id, message_id)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+async def get_original_text(
+    conn: AsyncConnection,
+    user_id: int,
+    message_id: int
+) -> Optional[str]:
+    async with conn.cursor() as cursor:
+        await cursor.execute(
+            """
+            SELECT original_text
+            FROM error_explanations
+            WHERE user_id = %s AND message_id = %s
+            """,
+            (user_id, message_id)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else None
 

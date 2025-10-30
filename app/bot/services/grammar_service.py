@@ -46,7 +46,7 @@ def combine_sentences(original: str, corrected: str) -> str:
         result.append(f"<s>{original_words[i]}</s>")
         i += 1
 
-    return " ".join(result)
+    return (" ".join(result), corrected)
 
 
 # === Асинхронная функция проверки грамматики ===
@@ -106,6 +106,57 @@ async def get_corrected_sentence(user_input: str) -> str:
                     print(f"API Error {response.status}: {error_text}")
                     return "Ошибка сервера."
 
+    except asyncio.TimeoutError:
+        return "Время ожидания истекло."
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        return "Произошла ошибка."
+
+
+
+####Функция для разбора ошибок:
+async def get_error_explanation(original: str, corrected: str) -> str:
+    """
+    Разбрает ошибки в предложении и объясняет их.
+    Возвращает объяснение ошибок или сообщение об ошибке API.
+    """
+    if original == corrected or corrected == "No errors.":
+        return "Нет ошибок для разбора."
+
+    # Системный промпт
+    SYSTEM_PROMPT: Dict[str, str] = {
+        "role": "user",
+        "content": (
+            "Сначала напиши исходный текст:, затем исправленный:.\n"
+            "Дай объяснение ошибок. Больше ничего не пишите.\n"
+            f"Исходный текст: {original}.\n"
+            f"Исправленный текст: {corrected}"
+        ),
+    }
+
+    messages: List[Dict[str, str]] = [SYSTEM_PROMPT.copy()]
+
+    payload = {
+        "model": "newapplication-61123",
+        "messages": messages,
+        "stream": False
+    }
+
+    timeout = aiohttp.ClientTimeout(total=30)
+
+    try:
+        async with aiohttp.ClientSession(timeout=timeout, headers=HEADERS) as session:
+            async with session.post(URL, json=payload) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    content = data.get("choices", [{}])[0] \
+                        .get("message", {}) \
+                        .get("content", "").strip()
+                    return content or "Не удалось получить объяснение."
+                else:
+                    error_text = await response.text()
+                    print(f"API Error {response.status}: {error_text}")
+                    return "Ошибка сервера."
     except asyncio.TimeoutError:
         return "Время ожидания истекло."
     except Exception as e:

@@ -3,24 +3,27 @@ import logging
 import os
 from contextlib import suppress
 
-from aiogram import Bot, Router, F
-from aiogram.enums import BotCommandScopeType, ParseMode
+from aiogram import Router, F
+from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import KICKED, ChatMemberUpdatedFilter, Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import FSInputFile
-from aiogram.types import BotCommandScopeChat, ChatMemberUpdated, Message
+from aiogram.types import ChatMemberUpdated, Message
 from app.bot.enums.roles import UserRole
-from app.bot.keyboards.menu_button import get_main_menu_commands
+from app.bot.keyboards.keyboards import error_analysis_keyboard, hide_keyboard, ERROR_BTN, HIDE_BTN
 from app.bot.services.translation_service import translate_en_to_ru
 from app.bot.services.voice_to_text_service import transcribe_voice_message
 from app.bot.services.ai_service import generate_ai_reply
-from app.bot.services.grammar_service import get_corrected_sentence
+from app.bot.services.grammar_service import get_corrected_sentence, get_error_explanation
 from app.bot.services.speech_service import t_t_v
 from app.infrastructure.database.db import (
     add_user,
     change_user_alive_status,
     get_user,
+    save_error_explanation,
+    get_original_text,
+    get_explanation_text
 )
 from psycopg.connection_async import AsyncConnection
 
@@ -30,12 +33,47 @@ logger = logging.getLogger(__name__)
 user_router = Router()
 
 
+@user_router.callback_query(F.data == ERROR_BTN)
+async def on_show_analysis(callback: Message, conn: AsyncConnection):
+    # Only respond if this message exists in last 5 entries; db getters will return None otherwise
+    explanation = await get_explanation_text(conn, user_id=callback.from_user.id, message_id=callback.message.message_id)
+    if explanation is None:
+        # silently ignore by answering callback, no edit
+        with suppress(Exception):
+            await callback.answer()
+        return
+    try:
+        await callback.message.edit_text(explanation)
+        await callback.message.edit_reply_markup(reply_markup=hide_keyboard())
+    except TelegramBadRequest:
+        pass
+    finally:
+        with suppress(Exception):
+            await callback.answer()
+
+
+@user_router.callback_query(F.data == HIDE_BTN)
+async def on_hide_analysis(callback: Message, conn: AsyncConnection):
+    original = await get_original_text(conn, user_id=callback.from_user.id, message_id=callback.message.message_id)
+    if original is None:
+        with suppress(Exception):
+            await callback.answer()
+        return
+    try:
+        await callback.message.edit_text(original, parse_mode=ParseMode.HTML)
+        await callback.message.edit_reply_markup(reply_markup=error_analysis_keyboard())
+    except TelegramBadRequest:
+        pass
+    finally:
+        with suppress(Exception):
+            await callback.answer()
+
+
 # Этот хэндлер срабатывает на команду /start
 @user_router.message(CommandStart())
 async def process_start_command(
         message: Message,
         conn: AsyncConnection,
-        bot: Bot,
         state: FSMContext,
         admin_ids: list[int]
 ):
@@ -82,18 +120,66 @@ async def process_user_blocked_bot(event: ChatMemberUpdated, conn: AsyncConnecti
 async def handle_voice(message: Message, conn: AsyncConnection):
     ai_voice = None
     try:
+        # отправляем временное сообщение
+        sent_trans = await message.answer("Распознаю голосовое сообщение...")
+
+        # Преобразование голосового сообщения в текст
         logger.info(f"Получено голосовое сообщение от пользователя {message.from_user.id}")
         user_mes = await transcribe_voice_message(message.bot, message.voice.file_id)
         logger.info(f"Преобразованное текстовое сообщение: {user_mes}")
+
+        # Удаляем временное сообщение
+        try:
+            await message.bot.delete_message(chat_id=message.chat.id, message_id=sent_trans.message_id)
+        except Exception as del_err:
+            logger.warning(f"Ошибка при удалении временного сообщения: {del_err}")
+
+        # Информируем пользователя, что бот обрабатывает сообщение
+        await message.bot.send_chat_action(chat_id=message.chat.id, action='typing')
+
          # Проверка грамматики
         corrected_sentence = await get_corrected_sentence(user_mes)
+
         if corrected_sentence != "No errors.":
-            await message.answer(corrected_sentence, parse_mode=ParseMode.HTML)
-            logger.info(f"Отправлено исправленное сообщение: {corrected_sentence}")
+            err_expl = await get_error_explanation(user_mes, corrected_sentence[1])
+
+        # Если есть исправления, отправляем исправленный текст и сохраняем объяснение
+            # Сначала отправляем исправленный текст и получаем его message_id
+            sent = await message.answer(
+                corrected_sentence[0],
+                parse_mode=ParseMode.HTML,
+                reply_markup=error_analysis_keyboard()
+            )
+            # Сохраняем запись, привязавшись к message_id сообщения бота
+            await save_error_explanation(
+                conn,
+                user_id=message.from_user.id,
+                message_id=sent.message_id,
+                original_text=corrected_sentence[0],
+                explanation_text=err_expl
+            )
+            logger.info(f"Сохранено оригинальное сообщение и его объяснение: {corrected_sentence[0]}, {err_expl}")
+            logger.info(f"Отправлено исправленное сообщение: {corrected_sentence[0]}")
+
+        # Информируем пользователя, что бот генерирует голосовое
+        await message.bot.send_chat_action(chat_id=message.chat.id, action='record_voice')
+
         # Генерация ответа ИИ
         ai_reply = await generate_ai_reply(conn, message.from_user.id, user_mes)
         logger.info(f"Получен ответ от модели {ai_reply}")
+
+        # Перед озвучиванием: отправляем временное сообщение
+        sent_voice = await message.answer("Озвучиваю ответ...")
+
+        # Генерация голоса
         ai_voice = await t_t_v(ai_reply)
+
+        # Удаляем временное сообщение
+        try:
+            await message.bot.delete_message(chat_id=message.chat.id, message_id=sent_voice.message_id)
+        except Exception as del_err:
+            logger.warning(f"Ошибка при удалении временного сообщения: {del_err}")
+
         if ai_voice:
             voice = FSInputFile(ai_voice)
             await message.answer_voice(voice)

@@ -1,5 +1,6 @@
 # Для запуска миграций из контейнера, когда в постгрес и редис хосты указаны по названию:
 # docker-compose exec bot python -m migrations.create_tables
+# Добавил в докерфайл строку для запуска сначала миграций, автоматически. Сейчас не нужно отдельно
 # docker compose build bot
 # docker compose up -d bot
 import asyncio
@@ -64,6 +65,24 @@ async def main():
                         );
                         CREATE INDEX IF NOT EXISTS idx_dialog_history_user_time
                         ON dialog_history (user_id, created_at DESC);
+                        """
+                    )
+                    # таблица для разборов ошибок
+                    await cursor.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS error_explanations(
+                        user_id BIGINT NOT NULL,
+                        message_id BIGINT NOT NULL,
+                        original_text TEXT NOT NULL,
+                        explanation_text TEXT NOT NULL,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        PRIMARY KEY (user_id, message_id),
+                        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+                        );
+                        CREATE INDEX IF NOT EXISTS idx_error_explanations_user_message
+                        ON error_explanations (user_id, message_id);
+                        CREATE INDEX IF NOT EXISTS idx_error_explanations_user_time
+                        ON error_explanations (user_id, created_at DESC);
                         """
                     )
                 logger.info("Tables `users` and `dialog_history` were successfully created")

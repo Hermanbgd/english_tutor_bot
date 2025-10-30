@@ -11,13 +11,13 @@ WORKDIR /app
 COPY requirements.txt ./
 
 # Установка Torch и Torchaudio только для CPU перед requirements, чтобы избежать дефолтных GPU
-RUN pip install torch==2.2.2+cpu torchaudio==2.2.2+cpu --index-url https://download.pytorch.org/whl/cpu
-
+RUN pip install --timeout=600 torch==2.2.2+cpu torchaudio==2.2.2+cpu --index-url https://download.pytorch.org/whl/cpu
 # Установка зависимостей проекта
 RUN pip install -r requirements.txt
 
 # Копируем остальной код проекта
 COPY . .
 
-CMD ["python", "main.py"]
+# Run migrations on container start then start the bot
+CMD sh -c "python -m migrations.create_tables && python main.py"
 
