@@ -22,22 +22,27 @@ admin_router.message.filter(UserRoleFilter(UserRole.ADMIN))
 
 # Этот хэндлер будет срабатывать на команду /help для пользователя с ролью `UserRole.ADMIN`
 @admin_router.message(Command('help'))
-async def process_admin_help_command(message: Message, i18n: dict):
-    await message.answer(text=i18n.get('/help_admin'))
+async def process_admin_help_command(message: Message):
+    await message.answer(text=(
+        "Доступные команды для администратора:\n"
+        "/ban <user_id|@username> — забанить пользователя\n"
+        "/unban <user_id|@username> — разбанить пользователя\n"
+        "/statistics — посмотреть статистику"
+    ))
 
 
 # Этот хэндлер будет срабатывать на команду /statistics для пользователя с ролью `UserRole.ADMIN`
-# @admin_router.message(Command('statistics'))
-# async def process_admin_statistics_command(message: Message, conn: AsyncConnection, i18n: dict[str, str]):
-#     statistics = await get_statistics(conn)
-#     await message.answer(
-#         text=i18n.get("statistics").format(
-#             "\n".join(
-#                 f"{i}. <b>{stat[0]}</b>: {stat[1]}"
-#                 for i, stat in enumerate(statistics, 1)
-#             )
-#         )
-#     )
+@admin_router.message(Command('statistics'))
+async def process_admin_statistics_command(message: Message, conn: AsyncConnection):
+    from app.infrastructure.database.db import get_admin_statistics
+    stats = await get_admin_statistics(conn)
+    if not stats:
+        await message.answer("Статистика пока недоступна.")
+        return
+    lines = []
+    for i, (name, value) in enumerate(stats, 1):
+        lines.append(f"{i}. {name}: {value}")
+    await message.answer("Статистика:\n" + "\n".join(lines))
 
 
 # Этот хэндлер будет срабатывать на команду /ban для пользователя с ролью `UserRole.ADMIN`
@@ -46,12 +51,11 @@ async def process_ban_command(
         message: Message,
         command: CommandObject,
         conn: AsyncConnection,
-        i18n: dict[str, str]
 ) -> None:
     args = command.args
 
     if not args:
-        await message.reply(i18n.get('empty_ban_answer'))
+        await message.reply("Укажите user_id или @username: /ban <user_id|@username>")
         return
 
     arg_user = args.split()[0].strip()
@@ -61,19 +65,19 @@ async def process_ban_command(
     elif arg_user.startswith('@'):
         banned_status = await get_user_banned_status_by_username(conn, username=arg_user[1:])
     else:
-        await message.reply(text=i18n.get('incorrect_ban_arg'))
+        await message.reply(text="Неверный аргумент. Используйте: /ban <user_id|@username>")
         return
 
     if banned_status is None:
-        await message.reply(i18n.get('no_user'))
+        await message.reply("Пользователь не найден.")
     elif banned_status:
-        await message.reply(i18n.get('already_banned'))
+        await message.reply("Пользователь уже забанен.")
     else:
         if arg_user.isdigit():
             await change_user_banned_status_by_id(conn, user_id=int(arg_user), banned=True)
         else:
             await change_user_banned_status_by_username(conn, username=arg_user[1:], banned=True)
-        await message.reply(text=i18n.get('successfully_banned'))
+        await message.reply(text="Пользователь забанен.")
 
 
 # Этот хэндлер будет срабатывать на команду /unban для пользователя с ролью `UserRole.ADMIN`
@@ -82,12 +86,11 @@ async def process_unban_command(
         message: Message,
         command: CommandObject,
         conn: AsyncConnection,
-        i18n: dict[str, str]
 ) -> None:
     args = command.args
 
     if not args:
-        await message.reply(i18n.get('empty_unban_answer'))
+        await message.reply("Укажите user_id или @username: /unban <user_id|@username>")
         return
 
     arg_user = args.split()[0].strip()
@@ -97,16 +100,16 @@ async def process_unban_command(
     elif arg_user.startswith('@'):
         banned_status = await get_user_banned_status_by_username(conn, username=arg_user[1:])
     else:
-        await message.reply(text=i18n.get('incorrect_unban_arg'))
+        await message.reply(text="Неверный аргумент. Используйте: /unban <user_id|@username>")
         return
 
     if banned_status is None:
-        await message.reply(i18n.get('no_user'))
+        await message.reply("Пользователь не найден.")
     elif banned_status:
         if arg_user.isdigit():
             await change_user_banned_status_by_id(conn, user_id=int(arg_user), banned=False)
         else:
             await change_user_banned_status_by_username(conn, username=arg_user[1:], banned=False)
-        await message.reply(text=i18n.get('successfully_unbanned'))
+        await message.reply(text="Пользователь разбанен.")
     else:
-        await message.reply(i18n.get('not_banned'))
+        await message.reply("Пользователь не забанен.")

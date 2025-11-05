@@ -85,7 +85,20 @@ async def main():
                         ON error_explanations (user_id, created_at DESC);
                         """
                     )
-                logger.info("Tables `users` and `dialog_history` were successfully created")
+                    # таблица для тем диалогов
+                    await cursor.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS dialog_topics (
+                            id SERIAL PRIMARY KEY,
+                            user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
+                            topic TEXT NOT NULL,
+                            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                        );
+                        CREATE INDEX IF NOT EXISTS idx_dialog_topics_user_time
+                        ON dialog_topics (user_id, created_at DESC);
+                        """
+                    )
+                logger.info("Tables `users`, `dialog_history`, `error_explanations`, `dialog_topics` were successfully created")
     except Error as db_error:
         logger.exception("Database-specific error: %s", db_error)
     except Exception as e:

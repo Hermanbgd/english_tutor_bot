@@ -6,7 +6,7 @@ from typing import List, Dict
 import requests
 from config.config import Config, load_config
 import tiktoken
-from app.infrastructure.database.db import get_last_5_pairs, save_dialog_pair
+from app.infrastructure.database.db import get_last_5_pairs, save_dialog_pair, save_dialog_topic
 
 config: Config = load_config()
 
@@ -88,6 +88,50 @@ async def _build_messages_from_db(conn, user_id: int) -> List[Dict[str, str]]:
     return messages
 
 
+async def extract_and_save_topic(conn, user_id: int) -> str | None:
+    """
+    Просим модель кратко обозначить тему текущего диалога на основании последних сообщений.
+    Формат: 1-3 слова на английском, без лишних символов, без предложений.
+    Результат сохраняем в БД.
+    """
+    pairs = await get_last_5_pairs(conn, user_id)
+    if not pairs:
+        return None
+
+    history_text = []
+    for u, a in pairs:
+        history_text.append(f"User: {u}")
+        history_text.append(f"Assistant: {a}")
+    joined = "\n".join(history_text)
+
+    prompt = (
+        "From the following short conversation, infer a concise topic in 1-3 English words. "
+        "Do not add quotes or punctuation, no sentences, just the topic.\n\n"
+        f"{joined}"
+    )
+
+    loop = asyncio.get_running_loop()
+    try:
+        topic = await loop.run_in_executor(
+            None,
+            _sync_chat_completion,
+            [
+                {"role": "system", "content": "You extract topics from conversations."},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        topic = topic.strip()
+        # Безопасное ограничение длины темы
+        topic = topic[:100]
+        if topic:
+            await save_dialog_topic(conn, user_id, topic)
+            return topic
+        return None
+    except Exception as e:
+        logger.warning("Failed to extract topic: %s", e)
+        return None
+
+
 async def generate_ai_reply(conn, user_id: int, user_input: str) -> str:
     """
     Сгенерировать ответ для пользователя user_id с учётом его истории из БД.
@@ -121,7 +165,33 @@ async def generate_ai_reply(conn, user_id: int, user_input: str) -> str:
         trimmed_ai_response = trim_message(ai_response)
         await save_dialog_pair(conn, user_id=user_id, user_message=trimmed_user_input, ai_message=trimmed_ai_response)
 
+        # Попробуем извлечь тему после обновления истории и сохранить
+        try:
+            topic = await extract_and_save_topic(conn, user_id)
+            if topic:
+                logger.info("Dialog topic updated: %s", topic)
+        except Exception as te:
+            logger.warning("Failed to extract or save topic: %s", te)
+
         return ai_response
     except Exception as e:
         logger.error("Error during chat completion: %s", e)
         return "Упс, что-то пошло не так! Попробуйте ещё раз."
+
+
+async def generate_custom_list(prompt: str) -> str:
+    """
+    Сгенерировать кастомный список (например, 5 слов по теме) по переданному prompt.
+    Возвращает сырой текст модели. Ожидаемый формат — одна пара "слово - перевод" на строку.
+    """
+    messages = [
+        {"role": "system", "content": "You produce short, plain lists for language learning."},
+        {"role": "user", "content": prompt},
+    ]
+    loop = asyncio.get_running_loop()
+    try:
+        result = await loop.run_in_executor(None, _sync_chat_completion, messages)
+        return result
+    except Exception as e:
+        logger.error("Error during custom list generation: %s", e)
+        raise

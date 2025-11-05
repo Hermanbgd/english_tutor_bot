@@ -1,5 +1,8 @@
 from aiogram.fsm.state import State, StatesGroup
 
 
-class LangSG(StatesGroup):
-    lang = State()
+class DialogSG(StatesGroup):
+    dialog = State()
+
+class NewWords(StatesGroup):
+    new_words = State()

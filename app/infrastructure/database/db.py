@@ -254,6 +254,58 @@ async def get_last_5_pairs(conn: AsyncConnection, user_id: int) -> list[tuple[An
     return list(reversed(rows)) if rows else []
 
 
+async def get_last_dialog_topic(conn: AsyncConnection, user_id: int) -> Optional[str]:
+    """
+    Возвращает тему последнего диалога пользователя, если в БД есть хранение темы.
+    По умолчанию попробуем извлечь из последних пар (например, по эвристике) —
+    здесь заглушка, возвращающая None, если отдельного поля темы нет.
+    При наличии таблицы dialog_topics (user_id, topic, created_at) — используйте её.
+    """
+    try:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                """
+                SELECT topic
+                FROM dialog_topics
+                WHERE user_id = %s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (user_id,)
+            )
+            row = await cursor.fetchone()
+            if row:
+                return row[0]
+    except Exception:
+        # Если таблицы нет — спокойно вернуть None, будет фолбэк на general conversation
+        return None
+    return None
+
+
+async def reset_user_dialog_history(conn: AsyncConnection, user_id: int) -> None:
+    """Удаляет всю историю диалога пользователя."""
+    async with conn.cursor() as cursor:
+        await cursor.execute(
+            """
+            DELETE FROM dialog_history
+            WHERE user_id = %s
+            """,
+            (user_id,)
+        )
+
+
+async def save_dialog_topic(conn: AsyncConnection, user_id: int, topic: str) -> None:
+    """Сохраняет тему диалога (append-only)."""
+    async with conn.cursor() as cursor:
+        await cursor.execute(
+            """
+            INSERT INTO dialog_topics (user_id, topic, created_at)
+            VALUES (%s, %s, NOW())
+            """,
+            (user_id, topic)
+        )
+
+
 async def save_error_explanation(
     conn: AsyncConnection,
     user_id: int,
@@ -324,4 +376,36 @@ async def get_original_text(
         )
         row = await cursor.fetchone()
         return row[0] if row else None
+
+
+async def get_admin_statistics(conn: AsyncConnection) -> list[tuple[str, int]]:
+    """Возвращает простую статистику для админов: количество пользователей, активных, забаненных, сообщений в диалогах, сохраненных тем."""
+    results: list[tuple[str, int]] = []
+    async with conn.cursor() as cursor:
+        # Всего пользователей
+        await cursor.execute("SELECT COUNT(*) FROM users")
+        total_users = (await cursor.fetchone())[0]
+        results.append(("Всего пользователей", total_users))
+
+        # Активные пользователи
+        await cursor.execute("SELECT COUNT(*) FROM users WHERE is_alive = TRUE")
+        alive_users = (await cursor.fetchone())[0]
+        results.append(("Активных пользователей", alive_users))
+
+        # Забаненные
+        await cursor.execute("SELECT COUNT(*) FROM users WHERE banned = TRUE")
+        banned_users = (await cursor.fetchone())[0]
+        results.append(("Забаненных пользователей", banned_users))
+
+        # Количество записей в истории диалога
+        await cursor.execute("SELECT COUNT(*) FROM dialog_history")
+        total_pairs = (await cursor.fetchone())[0]
+        results.append(("Записей в истории диалогов", total_pairs))
+
+        # Количество сохраненных тем
+        await cursor.execute("SELECT COUNT(*) FROM dialog_topics")
+        total_topics = (await cursor.fetchone())[0]
+        results.append(("Сохраненных тем", total_topics))
+
+    return results
 

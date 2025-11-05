@@ -91,21 +91,32 @@ async def process_start_command(
             role=user_role
         )
     else:
-        user_role = UserRole(user_row[4])
+        # user_row: (id, user_id, username, role, is_alive, banned, created_at)
+        # Валидируем значение роли, но не сохраняем переменную
+        _ = UserRole(user_row[3])
         await change_user_alive_status(
             conn,
             is_alive=True,
             user_id=message.from_user.id,
         )
 
-    await message.answer(text="Вы добавлены в базу данных, можете пользоваться ботом")
     await state.clear()
+    await message.answer(text="Диалог запущен. Отправьте голосовое сообщение для начала общения.")
 
 
 # Этот хэндлер срабатывает на команду /help
 @user_router.message(Command(commands="help"))
-async def process_help_command(message: Message, i18n: dict[str, str]):
-    await message.answer(text=i18n.get("/help"))
+async def process_help_command(message: Message):
+    await message.answer(text=(
+        "Доступные команды:\n"
+        "/start — старт диалога\n"
+        "/restart — перезапустить диалог\n"
+        "/continue — продолжить диалог\n"
+        "/pause — пауза диалога\n"
+        "/stop — стоп диалога\n"
+        "/newwords — 5 новых слов по теме\n"
+        "/help — помощь"
+    ))
 
 
 # Этот хэндлер будет срабатывать на блокировку бота пользователем

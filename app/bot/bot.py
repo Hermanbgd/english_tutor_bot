@@ -7,13 +7,13 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.redis import RedisStorage
 from app.bot.handlers.admin import admin_router
 from app.bot.handlers.others import others_router
-from app.bot.handlers.settings import settings_router
 from app.bot.handlers.user import user_router
 # from app.bot.i18n.translator import get_translations
 from app.bot.middlewares.database import DataBaseMiddleware
 # from app.bot.middlewares.i18n import TranslatorMiddleware
 # from app.bot.middlewares.lang_settings import LangSettingsMiddleware
 from app.bot.middlewares.shadow_ban import ShadowBanMiddleware
+from app.bot.middlewares.throttle import ThrottleMiddleware
 # from app.bot.middlewares.statistics import ActivityCounterMiddleware
 from app.infrastructure.database.connection import get_pg_pool
 from config.config import Config
@@ -60,12 +60,13 @@ async def main(config: Config) -> None:
 
     # Подключаем роутеры в нужном порядке
     logger.info("Including routers...")
-    dp.include_routers(settings_router, admin_router, user_router, others_router)
+    dp.include_routers(admin_router, user_router, others_router)
 
     # Подключаем миддлвари в нужном порядке
     logger.info("Including middlewares...")
     dp.update.middleware(DataBaseMiddleware())
     dp.update.middleware(ShadowBanMiddleware())
+    dp.update.middleware(ThrottleMiddleware(max_messages=5, window_seconds=10))
     # dp.update.middleware(ActivityCounterMiddleware())
     # dp.update.middleware(LangSettingsMiddleware())
     # dp.update.middleware(TranslatorMiddleware())

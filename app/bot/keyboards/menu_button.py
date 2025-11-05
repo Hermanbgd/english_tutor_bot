@@ -2,46 +2,27 @@ from aiogram.types import BotCommand
 from app.bot.enums.roles import UserRole
 
 
-def get_main_menu_commands(i18n: dict[str, str], role: UserRole):
+def get_main_menu_commands(role: UserRole):
     if role == UserRole.USER:
         return [
-            BotCommand(
-                command='/start',
-                description=i18n.get('/start_description')
-            ),
-            BotCommand(
-                command='/lang',
-                description=i18n.get('/lang_description')
-            ),
-            BotCommand(
-                command='/help',
-                description=i18n.get('/help_description')
-            ),
+            BotCommand(command='/start', description='Старт диалога'),
+            BotCommand(command='/restart', description='Перезапустить диалог'),
+            BotCommand(command='/continue', description='Продолжить диалог'),
+            BotCommand(command='/pause', description='Пауза диалога'),
+            BotCommand(command='/stop', description='Стоп диалога'),
+            BotCommand(command='/newwords', description='5 новых слов по теме'),
+            BotCommand(command='/help', description='Помощь'),
         ]
     elif role == UserRole.ADMIN:
         return [
-            BotCommand(
-                command='/start',
-                description=i18n.get('/start_description')
-            ),
-            BotCommand(
-                command='/lang',
-                description=i18n.get('/lang_description')
-            ),
-            BotCommand(
-                command='/help',
-                description=i18n.get('/help_description')
-            ),
-            BotCommand(
-                command='/ban',
-                description=i18n.get('/ban_description')
-            ),
-            BotCommand(
-                command='/unban',
-                description=i18n.get('/unban_description')
-            ),
-            BotCommand(
-                command='/statistics',
-                description=i18n.get('/statistics_description')
-            ),
+            BotCommand(command='/start', description='Старт диалога'),
+            BotCommand(command='/restart', description='Перезапустить диалог'),
+            BotCommand(command='/continue', description='Продолжить диалог'),
+            BotCommand(command='/pause', description='Пауза диалога'),
+            BotCommand(command='/stop', description='Стоп диалога'),
+            BotCommand(command='/newwords', description='5 новых слов по теме'),
+            BotCommand(command='/help', description='Помощь'),
+            BotCommand(command='/ban', description='Забанить пользователя'),
+            BotCommand(command='/unban', description='Разбанить пользователя'),
+            BotCommand(command='/statistics', description='Статистика'),
         ]
