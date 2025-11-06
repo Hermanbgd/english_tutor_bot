@@ -1,6 +1,7 @@
 import logging
 
 from aiogram import Router
+from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 from app.bot.enums.roles import UserRole
@@ -19,17 +20,26 @@ admin_router = Router()
 
 admin_router.message.filter(UserRoleFilter(UserRole.ADMIN))
 
-
 # Этот хэндлер будет срабатывать на команду /help для пользователя с ролью `UserRole.ADMIN`
 @admin_router.message(Command('help'))
 async def process_admin_help_command(message: Message):
     await message.answer(text=(
-        "Доступные команды для администратора:\n"
-        "/ban <user_id|@username> — забанить пользователя\n"
-        "/unban <user_id|@username> — разбанить пользователя\n"
-        "/statistics — посмотреть статистику"
-    ))
-
+        "<b>Обучение английскому через голос:</b>\n\n"
+        "• Отправьте <b>голосовое сообщение</b> — бот распознает речь, исправит ошибки, "
+        "ответит голосом и покажет перевод.\n"
+        "• Нажмите на исправленный текст — увидите объяснение ошибок.\n\n"
+        "<b>Команды:</b>\n"
+        "/statistics — Статистика\n"
+        "/ban — Забанить пользователя\n"
+        "/unban — Разбанить пользователя\n"
+        "/start — начать диалог\n"
+        "/restart — перезапустить диалог\n"
+        "/continue — продолжить после паузы\n"
+        "/pause — поставить диалог на паузу\n"
+        "/stop — завершить диалог\n"
+        "/newwords — 5 новых слов по текущей теме\n"
+        "/help — эта справка\n"
+    ), parse_mode=ParseMode.HTML)
 
 # Этот хэндлер будет срабатывать на команду /statistics для пользователя с ролью `UserRole.ADMIN`
 @admin_router.message(Command('statistics'))
@@ -42,8 +52,7 @@ async def process_admin_statistics_command(message: Message, conn: AsyncConnecti
     lines = []
     for i, (name, value) in enumerate(stats, 1):
         lines.append(f"{i}. {name}: {value}")
-    await message.answer("Статистика:\n" + "\n".join(lines))
-
+    await message.answer("Статистика:\n" + "\n".join(lines), parse_mode=ParseMode.HTML)
 
 # Этот хэндлер будет срабатывать на команду /ban для пользователя с ролью `UserRole.ADMIN`
 @admin_router.message(Command("ban"))
@@ -55,7 +64,7 @@ async def process_ban_command(
     args = command.args
 
     if not args:
-        await message.reply("Укажите user_id или @username: /ban <user_id|@username>")
+        await message.reply("Укажите user_id или @username: /ban user_id или @username")
         return
 
     arg_user = args.split()[0].strip()
@@ -65,7 +74,7 @@ async def process_ban_command(
     elif arg_user.startswith('@'):
         banned_status = await get_user_banned_status_by_username(conn, username=arg_user[1:])
     else:
-        await message.reply(text="Неверный аргумент. Используйте: /ban <user_id|@username>")
+        await message.reply(text="Неверный аргумент. Используйте: /ban user_id или @username", parse_mode=ParseMode.HTML)
         return
 
     if banned_status is None:
@@ -79,7 +88,6 @@ async def process_ban_command(
             await change_user_banned_status_by_username(conn, username=arg_user[1:], banned=True)
         await message.reply(text="Пользователь забанен.")
 
-
 # Этот хэндлер будет срабатывать на команду /unban для пользователя с ролью `UserRole.ADMIN`
 @admin_router.message(Command('unban'))
 async def process_unban_command(
@@ -90,7 +98,7 @@ async def process_unban_command(
     args = command.args
 
     if not args:
-        await message.reply("Укажите user_id или @username: /unban <user_id|@username>")
+        await message.reply("Укажите user_id или @username: /unban user_id или @username", parse_mode=ParseMode.HTML)
         return
 
     arg_user = args.split()[0].strip()
@@ -100,7 +108,7 @@ async def process_unban_command(
     elif arg_user.startswith('@'):
         banned_status = await get_user_banned_status_by_username(conn, username=arg_user[1:])
     else:
-        await message.reply(text="Неверный аргумент. Используйте: /unban <user_id|@username>")
+        await message.reply(text="Неверный аргумент. Используйте: /unban user_id или @username", parse_mode=ParseMode.HTML)
         return
 
     if banned_status is None:

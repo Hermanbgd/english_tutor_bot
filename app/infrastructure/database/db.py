@@ -402,10 +402,30 @@ async def get_admin_statistics(conn: AsyncConnection) -> list[tuple[str, int]]:
         total_pairs = (await cursor.fetchone())[0]
         results.append(("Записей в истории диалогов", total_pairs))
 
-        # Количество сохраненных тем
-        await cursor.execute("SELECT COUNT(*) FROM dialog_topics")
-        total_topics = (await cursor.fetchone())[0]
-        results.append(("Сохраненных тем", total_topics))
-
     return results
 
+
+async def delete_all_dialog_history(conn: AsyncConnection, user_id: int) -> int:
+    """
+    Удаляет ВСЮ историю диалога пользователя (все пары, независимо от количества).
+
+    Возвращает количество удалённых записей.
+    """
+    async with conn.cursor() as cursor:
+        await cursor.execute(
+            """
+            DELETE FROM dialog_history
+            WHERE user_id = %s
+            RETURNING id
+            """,
+            (user_id,)
+        )
+        deleted_rows = await cursor.fetchall()
+        deleted_count = len(deleted_rows)
+
+        if deleted_count > 0:
+            logger.info("Удалена вся история диалога: user_id=%s, удалено записей: %d", user_id, deleted_count)
+        else:
+            logger.info("История диалога пуста: user_id=%s", user_id)
+
+        return deleted_count

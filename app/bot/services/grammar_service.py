@@ -127,8 +127,9 @@ async def get_error_explanation(original: str, corrected: str) -> str:
     SYSTEM_PROMPT: Dict[str, str] = {
         "role": "user",
         "content": (
+            "Дай объяснение ошибок.\n"
             "Сначала напиши исходный текст:, затем исправленный:.\n"
-            "Дай объяснение ошибок. Больше ничего не пишите.\n"
+            "Затем разбор ошибок. Больше ничего не пишите.\n"
             f"Исходный текст: {original}.\n"
             f"Исправленный текст: {corrected}"
         ),
