@@ -429,3 +429,24 @@ async def delete_all_dialog_history(conn: AsyncConnection, user_id: int) -> int:
             logger.info("История диалога пуста: user_id=%s", user_id)
 
         return deleted_count
+
+async def has_dialog_history(conn: AsyncConnection, user_id: int) -> bool:
+    """
+    Возвращает:
+        True  — если у пользователя есть хотя бы одна пара в истории диалога
+        False — если история полностью пуста
+    """
+    async with conn.cursor() as cursor:
+        await cursor.execute(
+            """
+            SELECT 1
+            FROM dialog_history
+            WHERE user_id = %s
+            LIMIT 1
+            """,
+            (user_id,)
+        )
+        exists = await cursor.fetchone()
+        result = bool(exists)
+        logger.debug("has_dialog_history: user_id=%s → %s", user_id, result)
+        return result

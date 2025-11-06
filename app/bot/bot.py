@@ -49,10 +49,6 @@ async def main(config: Config) -> None:
         password=config.db.password,
     )
 
-    # Получаем словарь с переводами
-    # translations = get_translations()
-    # формируем список локалей из ключей словаря с переводами
-    # locales = list(translations.keys())
 
     # Подключаем роутеры в нужном порядке
     logger.info("Including routers...")
@@ -63,16 +59,12 @@ async def main(config: Config) -> None:
     dp.update.middleware(DataBaseMiddleware())
     dp.update.middleware(ShadowBanMiddleware())
     dp.update.middleware(ThrottleMiddleware(max_messages=5, window_seconds=10))
-    # dp.update.middleware(ActivityCounterMiddleware())
-    # dp.update.middleware(LangSettingsMiddleware())
-    # dp.update.middleware(TranslatorMiddleware())
+
 
     # Запускаем поллинг
     try:
         await dp.start_polling(
             bot, db_pool=db_pool,
-            # translations=translations,
-            # locales=locales,
             admin_ids=config.bot.admin_ids
         )
     except Exception as e:

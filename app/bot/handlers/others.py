@@ -10,4 +10,4 @@ others_router = Router()
 # хэндлеры из других роутеров
 @others_router.message()
 async def send_info_message(message: Message) -> None:
-    await message.reply("Извините, я не знаю, что на это ответить...")
+    await message.reply("Извините, я не знаю, что на это ответить. Пожалуйста, начните диалог и отправьте голосовое сообщение на английском.")

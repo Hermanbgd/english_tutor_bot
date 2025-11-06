@@ -3,21 +3,22 @@ import logging
 import os
 from contextlib import suppress
 
-from aiogram import Router, F
-from aiogram.enums import ParseMode
+from aiogram import Router, F, Bot
+from aiogram.enums import ParseMode, BotCommandScopeType
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import KICKED, ChatMemberUpdatedFilter, Command, CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import FSInputFile
+from aiogram.types import FSInputFile, BotCommandScopeChat
 from aiogram.types import ChatMemberUpdated, Message
 from app.bot.enums.roles import UserRole
 from app.bot.keyboards.keyboards import error_analysis_keyboard, hide_keyboard, ERROR_BTN, HIDE_BTN
+from app.bot.keyboards.menu_button import get_main_menu_commands
 from app.bot.services.translation_service import translate_en_to_ru
 from app.bot.services.voice_to_text_service import transcribe_voice_message
 from app.bot.services.ai_service import generate_ai_reply, generate_5_words
 from app.bot.services.grammar_service import get_corrected_sentence, get_error_explanation
 from app.bot.services.speech_service import t_t_v
-from app.bot.states.states import NewWords, DialogSG
+from app.bot.states.states import OutDialog, DialogSG
 from app.infrastructure.database.db import (
     add_user,
     change_user_alive_status,
@@ -25,7 +26,7 @@ from app.infrastructure.database.db import (
     save_error_explanation,
     get_original_text,
     get_explanation_text,
-    delete_all_dialog_history
+    delete_all_dialog_history, has_dialog_history
 )
 from psycopg.connection_async import AsyncConnection
 
@@ -75,6 +76,7 @@ async def on_hide_analysis(callback: Message, conn: AsyncConnection):
 @user_router.message(CommandStart())
 async def process_start_command(
     message: Message,
+    bot: Bot,
     conn: AsyncConnection,
     state: FSMContext,
     admin_ids: list[int]
@@ -84,11 +86,17 @@ async def process_start_command(
         user_role = UserRole.ADMIN if message.from_user.id in admin_ids else UserRole.USER
         await add_user(conn, user_id=message.from_user.id, username=message.from_user.username, role=user_role)
     else:
-        _ = UserRole(user_row[3])
+        user_role = UserRole(user_row[3])
         await change_user_alive_status(conn, is_alive=True, user_id=message.from_user.id)
 
-    await state.clear()
     await state.set_state(DialogSG.dialog)  # ← ВАЖНО: включаем состояние диалога
+    await bot.set_my_commands(
+        commands=get_main_menu_commands(role=user_role),
+        scope=BotCommandScopeChat(
+            type=BotCommandScopeType.CHAT,
+            chat_id=message.from_user.id
+        )
+    )
     await message.answer("Диалог запущен. Отправьте голосовое сообщение для начала общения.")
 
 
@@ -96,6 +104,10 @@ async def process_start_command(
 @user_router.message(Command(commands="help"))
 async def process_help_command(message: Message):
     await message.answer(text=(
+        "<b>Обучение английскому в диалоге:</b>\n\n"
+        "• Отправьте <b>голосовое сообщение на английском</b> — бот исправит ошибки, "
+        "ответит и покажет перевод.\n"
+        "• Можно узнать 5 новых слов по теме диалога.\n\n"
         "Доступные команды:\n"
         "/start — старт диалога\n"
         "/restart — перезапустить диалог\n"
@@ -207,29 +219,49 @@ async def handle_voice(message: Message, conn: AsyncConnection):
             logger.info(f"Deleted voice file: {ai_voice}")
 
 
-@user_router.message(Command("restart"), DialogSG.dialog)
+@user_router.message(Command("restart"))
 async def process_restart_command(message: Message, conn: AsyncConnection, state: FSMContext):
-    await delete_all_dialog_history(conn, message.from_user.id)
-    await state.set_state(DialogSG.dialog)
-    await message.answer("Диалог перезапущен. Можете начать сначала.")
+    current_state = await state.get_state()
+    if current_state == DialogSG.dialog:
+        await delete_all_dialog_history(conn, message.from_user.id)
+        await state.set_state(DialogSG.dialog)
+        await message.answer("Диалог перезапущен. Можете начать сначала.")
+    else:
+        await message.answer("Нет начатого диалога. Нажмите /start чтобы начать диалог")
 
-@user_router.message(Command("continue"), NewWords.new_words)
-async def process_continue_command(message: Message, state: FSMContext):
-    await state.set_state(DialogSG.dialog)
-    await message.answer("Продолжаем диалог.")
+@user_router.message(Command("continue"))
+async def process_continue_command(message: Message, conn: AsyncConnection, state: FSMContext):
+    current_state = await state.get_state()
+    if current_state == OutDialog.out_dialog and await has_dialog_history(conn, message.from_user.id):
+        await state.set_state(DialogSG.dialog)
+        await message.answer("Продолжаем диалог.")
+    else:
+        await message.answer("Вы уже в диалоге.")
 
-@user_router.message(Command("pause"), DialogSG.dialog)
+@user_router.message(Command("pause"))
 async def process_pause_command(message: Message, state: FSMContext):
-    await state.set_state(NewWords.new_words)
-    await message.answer("Диалог поставлен на паузу. Чтобы продолжить, используйте /continue.")
+    current_state = await state.get_state()
+    if current_state == DialogSG.dialog:
+        await state.set_state(OutDialog.out_dialog)
+        await message.answer("Диалог поставлен на паузу. Чтобы продолжить, используйте /continue.")
+    else:
+        await message.answer("Вы не находитесь в диалоге. Нажмите /start для начала диалога или /continue для продолжения диалога.")
 
-@user_router.message(Command("stop"), DialogSG.dialog)
+
+@user_router.message(Command("stop"))
 async def process_stop_command(message: Message, conn: AsyncConnection, state: FSMContext):
-    await delete_all_dialog_history(conn, message.from_user.id)
-    await state.set_state(NewWords.new_words)
-    await message.answer("Диалог остановлен. Для нового диалога используйте /start.")
+    current_state = await state.get_state()
+    if current_state == DialogSG.dialog:
+        await delete_all_dialog_history(conn, message.from_user.id)
+        await state.set_state(OutDialog.out_dialog)
+        await message.answer("Диалог остановлен. Для нового диалога используйте /start.")
+    else:
+        await message.answer("Вы не находитесь в диалоге. Нажмите /start для начала диалога или /continue для продолжения диалога.")
 
-@user_router.message(Command("newwords"), NewWords.new_words)
+
+@user_router.message(Command("newwords"), DialogSG.dialog)
 async def process_new_words_command(message: Message, conn: AsyncConnection):
+    # Информируем пользователя, что бот обрабатывает сообщение
+    await message.bot.send_chat_action(chat_id=message.chat.id, action='typing')
     answer = await generate_5_words(conn, message.from_user.id)
     await message.answer(answer)
