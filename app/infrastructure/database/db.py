@@ -254,58 +254,6 @@ async def get_last_5_pairs(conn: AsyncConnection, user_id: int) -> list[tuple[An
     return list(reversed(rows)) if rows else []
 
 
-async def get_last_dialog_topic(conn: AsyncConnection, user_id: int) -> Optional[str]:
-    """
-    Возвращает тему последнего диалога пользователя, если в БД есть хранение темы.
-    По умолчанию попробуем извлечь из последних пар (например, по эвристике) —
-    здесь заглушка, возвращающая None, если отдельного поля темы нет.
-    При наличии таблицы dialog_topics (user_id, topic, created_at) — используйте её.
-    """
-    try:
-        async with conn.cursor() as cursor:
-            await cursor.execute(
-                """
-                SELECT topic
-                FROM dialog_topics
-                WHERE user_id = %s
-                ORDER BY created_at DESC
-                LIMIT 1
-                """,
-                (user_id,)
-            )
-            row = await cursor.fetchone()
-            if row:
-                return row[0]
-    except Exception:
-        # Если таблицы нет — спокойно вернуть None, будет фолбэк на general conversation
-        return None
-    return None
-
-
-async def reset_user_dialog_history(conn: AsyncConnection, user_id: int) -> None:
-    """Удаляет всю историю диалога пользователя."""
-    async with conn.cursor() as cursor:
-        await cursor.execute(
-            """
-            DELETE FROM dialog_history
-            WHERE user_id = %s
-            """,
-            (user_id,)
-        )
-
-
-async def save_dialog_topic(conn: AsyncConnection, user_id: int, topic: str) -> None:
-    """Сохраняет тему диалога (append-only)."""
-    async with conn.cursor() as cursor:
-        await cursor.execute(
-            """
-            INSERT INTO dialog_topics (user_id, topic, created_at)
-            VALUES (%s, %s, NOW())
-            """,
-            (user_id, topic)
-        )
-
-
 async def save_error_explanation(
     conn: AsyncConnection,
     user_id: int,
@@ -327,7 +275,7 @@ async def save_error_explanation(
                 """,
                 (user_id, message_id, original_text, explanation_text)
             )
-            # Удаляем все, кроме 5 последних записей
+            # Удаляем все, кроме 10 последних записей
             await cursor.execute(
                 """
                 DELETE FROM error_explanations
@@ -337,7 +285,7 @@ async def save_error_explanation(
                     FROM error_explanations
                     WHERE user_id = %s
                     ORDER BY created_at DESC
-                    LIMIT 5
+                    LIMIT 10
                 )
                 """,
                 (user_id, user_id)

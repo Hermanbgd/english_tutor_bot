@@ -1,8 +1,6 @@
 import sys
 import tempfile
 import os
-from aiogram import Bot, Dispatcher, types
-from aiogram.types import FSInputFile
 from gtts import gTTS
 import asyncio
 import logging

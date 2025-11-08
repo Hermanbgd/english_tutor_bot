@@ -10,8 +10,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - ./.postgres_data:/var/lib/postgresql/data
-    ports:
-      - "${POSTGRES_PORT}:5432"
+#    ports:
+#      - "${POSTGRES_PORT}:5432"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
@@ -60,8 +60,8 @@ services:
     volumes:
       - ./.redis_data:/data
     restart: unless-stopped
-    ports:
-      - "${REDIS_PORT}:6379"
+#    ports:
+#      - "${REDIS_PORT}:6379"
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "PING"]
