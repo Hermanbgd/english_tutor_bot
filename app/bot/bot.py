@@ -1,4 +1,8 @@
+import asyncio
 import logging
+
+from aiohttp import web
+from aiogram.types import Update
 
 import psycopg_pool
 from aiogram import Bot, Dispatcher
@@ -62,14 +66,52 @@ async def main(config: Config) -> None:
 
 
     # Запускаем поллинг
+    # try:
+    #     await dp.start_polling(
+    #         bot, db_pool=db_pool,
+    #         admin_ids=config.bot.admin_ids
+    #     )
+    # except Exception as e:
+    #     logger.exception(e)
+    # finally:
+    #     # Закрываем пул соединений
+    #     await db_pool.close()
+    #     logger.info("Connection to Postgres closed")
+
+    # Настройка webhook
+    WEBHOOK_PATH = f"/webhook/{config.bot.token}"
+    WEBHOOK_URL = f"https://englishtutorbot.ru{WEBHOOK_PATH}"
+
+    await bot.delete_webhook(drop_pending_updates=True)
+    await bot.set_webhook(url=WEBHOOK_URL)
+
+    app = web.Application()
+
+    async def handle_webhook(request):
+        token = request.match_info.get('token')
+        if token != config.bot.token:
+            return web.Response(status=403)
+        data = await request.json()
+        update = Update(**data)
+        await dp.feed_update(bot=bot, update=update)
+        return web.Response()
+
+    app.router.add_post(f'/webhook/{{token}}', handle_webhook)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', 8443)
+    await site.start()
+    logger.info(f"Webhook запущен: {WEBHOOK_URL}")
+    logger.info("Бот работает на вебхуках, порт 8443")
+
     try:
-        await dp.start_polling(
-            bot, db_pool=db_pool,
-            admin_ids=config.bot.admin_ids
-        )
+        # Бесконечный цикл — держим сервер живым
+        await asyncio.Event().wait()
     except Exception as e:
         logger.exception(e)
     finally:
-        # Закрываем пул соединений
+        # При завершении удаляем webhook и закрываем соединения
+        await bot.delete_webhook()
         await db_pool.close()
-        logger.info("Connection to Postgres closed")
+        logger.info("Webhook удалён, соединение с Postgres закрыто")
