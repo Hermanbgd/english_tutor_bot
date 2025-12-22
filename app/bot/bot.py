@@ -100,7 +100,7 @@ async def main(config: Config) -> None:
 
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 5000)
+    site = web.TCPSite(runner, '0.0.0.0', 8443)
     await site.start()
     logger.info(f"Webhook запущен: {WEBHOOK_URL}")
     logger.info("Бот работает на вебхуках, порт 8443")
