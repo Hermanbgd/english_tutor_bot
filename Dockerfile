@@ -20,5 +20,5 @@ COPY . .
 
 # Run migrations on container start then start the bot
 #CMD sh -c "python -m migrations.create_tables && python main.py"
-CMD sh -c "python main.py"
+CMD sh -c "python -m python main.py"
 
