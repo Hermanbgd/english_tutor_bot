@@ -96,7 +96,7 @@ def load_config(path: str | None = None) -> Config:
     )
 
     ai_settings = AISettings(
-        token=env("CHIPP_API_KEY"),
+        token=env("POLZA_AI_API_KEY"),
     )
 
     logger.info("Configuration loaded successfully")
