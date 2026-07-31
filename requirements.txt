@@ -10,5 +10,4 @@ openai-whisper==20231117
 pydub~=0.25.1
 environs~=14.3.0
 numpy~=1.26.4
-aiohttp~=3.12.15
 
