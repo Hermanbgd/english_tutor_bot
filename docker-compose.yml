@@ -109,8 +109,6 @@ services:
         max-size: "10m"
         max-file: "5"
         compress: "true"
-    ports:
-      - "8443:8443"
     networks:
       - app_network
 
