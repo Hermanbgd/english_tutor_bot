@@ -88,14 +88,24 @@ async def main(config: Config) -> None:
     app = web.Application()
 
     async def handle_webhook(request):
-        token = request.match_info.get('token')
-        if token != config.bot.token:
-            return web.Response(status=403)
-        data = await request.json()
-        update = Update(**data)
-        # Передаем db_pool, как это делалось в start_polling
-        await dp.feed_update(bot=bot, update=update, db_pool=db_pool, admin_ids=config.bot.admin_ids)
-        return web.Response()
+        try:
+            print("Webhook called")
+            token = request.match_info.get('token')
+            print(f"TOKEN: {token}")
+            if token != config.bot.token:
+                print("Token mismatch!")
+                return web.Response(status=403)
+            data = await request.json()
+            print("Incoming JSON:", data)
+            update = Update(**data)
+            await dp.feed_update(bot=bot, update=update)
+            print("Feed update OK")
+            return web.Response()
+        except Exception as e:
+            print("EXCEPTION:", e)
+            import traceback
+            traceback.print_exc()
+            return web.Response(status=500, text=str(e))
 
     app.router.add_post(f'/webhook/{{token}}', handle_webhook)
 
