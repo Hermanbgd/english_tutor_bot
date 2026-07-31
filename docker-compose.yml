@@ -36,7 +36,9 @@ services:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
     volumes:
-      - ./.pgadmin_data:/var/lib/pgadmin
+#      - ./.pgadmin_data:/var/lib/pgadmin
+# изменил при переходе на вебхук
+      - pgadmin-data:/var/lib/pgadmin
     ports:
       - "${PGADMIN_PORT}:80"
     restart: unless-stopped
@@ -88,7 +90,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - BOT_TOKEN=${BOT_TOKEN}
-      - CHIPP_API_KEY=${CHIPP_API_KEY}
+      - POLZA_AI_API_KEY=${POLZA_AI_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy
@@ -107,6 +109,8 @@ services:
         max-size: "10m"
         max-file: "5"
         compress: "true"
+    ports:
+      - "8443:8443"
     networks:
       - app_network
 

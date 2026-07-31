@@ -3,7 +3,7 @@ import sys
 import asyncio
 import logging
 from typing import List, Dict
-import requests
+from openai import OpenAI
 from config.config import Config, load_config
 import tiktoken
 from app.infrastructure.database.db import get_last_5_pairs, save_dialog_pair
@@ -38,29 +38,26 @@ SYSTEM_PROMPT: Dict[str, str] = {
     ),
 }
 
-URL = "https://app.chipp.ai/api/v1/chat/completions"
-HEADERS = {
-    "Authorization": f"Bearer {config.ai.token}",
-    "Content-Type": "application/json"
-}
+# === Клиент OpenAI (polza.ai / DeepSeek) ===
+client = OpenAI(
+    base_url="https://polza.ai/api/v1",
+    api_key=config.ai.token,
+)
 
-# === Синхронная функция для requests (будет в потоке) ===
+MODEL = "deepseek/deepseek-v4-flash"
+
+# === Синхронная функция для OpenAI-клиента (будет в потоке) ===
 def _sync_chat_completion(messages: List[Dict[str, str]]) -> str:
-    payload = {
-        "model": "newapplication-61123",
-        "messages": messages,
-        "stream": False
-    }
-
-    response = requests.post(URL, headers=HEADERS, json=payload, timeout=30)
-
-    if response.status_code == 200:
+    try:
+        completion = client.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+        )
         logger.info("API response received successfully.")
-        data = response.json()
-        content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-        return content or "Не удалось получить ответ от ИИ."
-    else:
-        error_msg = f"API Error {response.status_code}: {response.text}"
+        content = completion.choices[0].message.content
+        return content.strip() if content else "Не удалось получить ответ от ИИ."
+    except Exception as e:
+        error_msg = f"API Error: {e}"
         logger.error(error_msg)
         return "Ошибка сервера. Попробуйте позже."
 

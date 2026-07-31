@@ -1,15 +1,16 @@
 from config.config import Config, load_config
-import aiohttp
-import asyncio
+from openai import OpenAI
 from typing import List, Dict
 
 config: Config = load_config()
 
-URL = "https://app.chipp.ai/api/v1/chat/completions"
-HEADERS = {
-    "Authorization": f"Bearer {config.ai.token}",
-    "Content-Type": "application/json"
-}
+# === Клиент OpenAI (polza.ai / DeepSeek) ===
+client = OpenAI(
+    base_url="https://polza.ai/api/v1",
+    api_key=config.ai.token,
+)
+
+MODEL = "deepseek/deepseek-v4-flash"
 
 
 # === Функция для создания исправленного сообщения с зачеркнутым текстом ===
@@ -79,35 +80,18 @@ async def get_corrected_sentence(user_input: str) -> str:
 
     messages: List[Dict[str, str]] = [SYSTEM_PROMPT.copy()]
 
-    payload = {
-        "model": "newapplication-61123",
-        "messages": messages,
-        "stream": False
-    }
-
-    timeout = aiohttp.ClientTimeout(total=30)
-
     try:
-        async with aiohttp.ClientSession(timeout=timeout, headers=HEADERS) as session:
-            async with session.post(URL, json=payload) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    content = data.get("choices", [{}])[0] \
-                                     .get("message", {}) \
-                                     .get("content", "").strip()
+        completion = client.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+        )
+        content = completion.choices[0].message.content.strip()
 
-                    if content == "No errors.":
-                        return "No errors."  # Всё верно
-                    else:
-                        # Есть исправление — применяем визуальную разницу
-                        return combine_sentences(user_input, content)
-                else:
-                    error_text = await response.text()
-                    print(f"API Error {response.status}: {error_text}")
-                    return "Ошибка сервера."
-
-    except asyncio.TimeoutError:
-        return "Время ожидания истекло."
+        if content == "No errors.":
+            return "No errors."  # Всё верно
+        else:
+            # Есть исправление — применяем визуальную разницу
+            return combine_sentences(user_input, content)
     except Exception as e:
         print(f"Unexpected error: {e}")
         return "Произошла ошибка."
@@ -137,29 +121,13 @@ async def get_error_explanation(original: str, corrected: str) -> str:
 
     messages: List[Dict[str, str]] = [SYSTEM_PROMPT.copy()]
 
-    payload = {
-        "model": "newapplication-61123",
-        "messages": messages,
-        "stream": False
-    }
-
-    timeout = aiohttp.ClientTimeout(total=30)
-
     try:
-        async with aiohttp.ClientSession(timeout=timeout, headers=HEADERS) as session:
-            async with session.post(URL, json=payload) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    content = data.get("choices", [{}])[0] \
-                        .get("message", {}) \
-                        .get("content", "").strip()
-                    return content or "Не удалось получить объяснение."
-                else:
-                    error_text = await response.text()
-                    print(f"API Error {response.status}: {error_text}")
-                    return "Ошибка сервера."
-    except asyncio.TimeoutError:
-        return "Время ожидания истекло."
+        completion = client.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+        )
+        content = completion.choices[0].message.content.strip()
+        return content or "Не удалось получить объяснение."
     except Exception as e:
         print(f"Unexpected error: {e}")
         return "Произошла ошибка."
